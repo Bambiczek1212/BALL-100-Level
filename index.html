@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>White Ball 100 Balanced Levels</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #030712;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #080c14;
+        }
+
+        canvas {
+            background-color: #0b0f19;
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.9);
+            border-radius: 16px;
+        }
+
+        /* Fullscreen Fail Overlay */
+        #fail-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(3, 7, 18, 0.96);
+            z-index: 50;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .curse-text {
+            font-size: 6rem;
+            font-weight: 900;
+            color: #ef4444;
+            text-shadow: 0 0 40px rgba(239, 68, 68, 0.9), 0 0 80px rgba(239, 68, 68, 0.5);
+            letter-spacing: 6px;
+            animation: shake 0.2s infinite alternate;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(-5px, -5px) rotate(-2deg); }
+            100% { transform: translate(5px, 5px) rotate(2deg); }
+        }
+
+        /* Success Overlay */
+        #win-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(6, 78, 59, 0.94);
+            z-index: 50;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .touch-btn {
+            background: rgba(30, 41, 59, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            touch-action: manipulation;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .touch-btn:active {
+            background: rgba(239, 68, 68, 0.9);
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- OVERLAY PRZEGRANEJ "KUR##!" -->
+    <div id="fail-overlay">
+        <div class="curse-text">KUR##!</div>
+        <p class="text-sm font-extrabold text-red-400 mt-3 tracking-widest uppercase animate-pulse">
+            Zginąłeś! Resetowanie poziomu...
+        </p>
+    </div>
+
+    <!-- OVERLAY WYGRANEJ POZIOMU -->
+    <div id="win-overlay">
+        <div class="text-4xl md:text-5xl font-black text-emerald-400 mb-2 uppercase tracking-wider flex items-center gap-3">
+            <i class="fa-solid fa-trophy text-amber-400 animate-bounce"></i> POZIOM UKOŃCZONY!
+        </div>
+        <p id="win-level-text" class="text-base text-gray-200 mb-6 font-bold">Następne wyzwanie czeka...</p>
+    </div>
+
+    <!-- PASEK GÓRNY / HEADER -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex justify-between items-center z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center text-gray-950 font-black shadow-lg shadow-white/20">
+                <i class="fa-solid fa-circle text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-black text-white tracking-wide">WHITE BALL: 100 BALANCED</h1>
+                <p id="difficulty-badge" class="text-[11px] text-emerald-400 font-bold">Trudność: Mega łatwo</p>
+            </div>
+        </div>
+
+        <!-- Wybór Poziomów & Audio -->
+        <div class="flex items-center gap-2.5">
+            <button id="btn-audio" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-volume-xmark" id="audio-icon"></i> Muzyka Synth
+            </button>
+
+            <div class="bg-gray-950 border border-gray-800 px-3 py-1.5 rounded-2xl flex items-center gap-2">
+                <span class="text-xs font-black text-amber-400 uppercase">Poziom:</span>
+                <span id="level-display" class="text-base font-black text-white">1 / 100</span>
+            </div>
+
+            <button id="btn-select-level" class="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg">
+                <i class="fa-solid fa-list-ol"></i> Poziomy
+            </button>
+        </div>
+    </header>
+
+    <!-- GŁÓWNY ZASOBNIK KANWY GRAFIKI 2D -->
+    <div id="game-container" class="flex-1 relative overflow-hidden p-2 md:p-4">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Przyciski Sterowania Mobilnego Dotykowego -->
+        <div id="mobile-controls" class="absolute bottom-4 inset-x-4 flex justify-between items-center pointer-events-none md:hidden z-10">
+            <!-- Lewo / Prawo -->
+            <div class="flex gap-3 pointer-events-auto">
+                <button id="btn-left" class="touch-btn w-16 h-16">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <button id="btn-right" class="touch-btn w-16 h-16">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+
+            <!-- Skok -->
+            <div class="pointer-events-auto">
+                <button id="btn-jump" class="touch-btn w-20 h-20 bg-emerald-600/80 border-emerald-400/60 text-2xl shadow-lg">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL WYBORU POZIOMU z 100 PRZYCISKAMI -->
+    <div id="level-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-3xl max-w-2xl w-full p-6 flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+                <h2 class="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-amber-400"></i> Wybór Poziomu (1 - 100)
+                </h2>
+                <button id="btn-close-modal" class="text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Siatka 100 Poziomów -->
+            <div id="levels-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 overflow-y-auto p-2 flex-1">
+                <!-- Generowane w JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- SYNTEZATOR MUZYKI SYNTHWAVE -->
+    <script>
+        class SynthwaveEngine {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = true;
+                this.timer = null;
+                this.step = 0;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            toggle() {
+                this.init();
+                this.isMuted = !this.isMuted;
+                const icon = document.getElementById('audio-icon');
+                if (this.isMuted) {
+                    icon.className = "fa-solid fa-volume-xmark";
+                    this.stop();
+                } else {
+                    icon.className = "fa-solid fa-volume-high text-emerald-400";
+                    this.start();
+                }
+            }
+
+            playJump() {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(480, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playFail() {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(260, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.45);
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.45);
+            }
+
+            playWin() {
+                if (this.isMuted || !this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        if (this.isMuted) return;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                        gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.18);
+                    }, i * 70);
+                });
+            }
+
+            start() {
+                this.stop();
+                const bassLine = [55, 55, 65, 55, 55, 65, 49, 55];
+                const leadLine = [220, 0, 261, 0, 293, 261, 220, 196];
+
+                this.timer = setInterval(() => {
+                    if (this.isMuted || !this.ctx) return;
+
+                    const now = this.ctx.currentTime;
+
+                    const bFreq = bassLine[this.step % bassLine.length];
+                    if (bFreq > 0) {
+                        const bOsc = this.ctx.createOscillator();
+                        const bGain = this.ctx.createGain();
+                        bOsc.type = 'sawtooth';
+                        bOsc.frequency.setValueAtTime(bFreq, now);
+                        bGain.gain.setValueAtTime(0.12, now);
+                        bGain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                        bOsc.connect(bGain);
+                        bGain.connect(this.ctx.destination);
+                        bOsc.start(now);
+                        bOsc.stop(now + 0.18);
+                    }
+
+                    if (this.step % 2 === 0) {
+                        const kOsc = this.ctx.createOscillator();
+                        const kGain = this.ctx.createGain();
+                        kOsc.frequency.setValueAtTime(120, now);
+                        kOsc.frequency.exponentialRampToValueAtTime(30, now + 0.08);
+                        kGain.gain.setValueAtTime(0.25, now);
+                        kGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                        kOsc.connect(kGain);
+                        kGain.connect(this.ctx.destination);
+                        kOsc.start(now);
+                        kOsc.stop(now + 0.08);
+                    }
+
+                    const lFreq = leadLine[this.step % leadLine.length];
+                    if (lFreq > 0) {
+                        const lOsc = this.ctx.createOscillator();
+                        const lGain = this.ctx.createGain();
+                        lOsc.type = 'square';
+                        lOsc.frequency.setValueAtTime(lFreq, now);
+                        lGain.gain.setValueAtTime(0.06, now);
+                        lGain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                        lOsc.connect(lGain);
+                        lGain.connect(this.ctx.destination);
+                        lOsc.start(now);
+                        lOsc.stop(now + 0.15);
+                    }
+
+                    this.step++;
+                }, 160);
+            }
+
+            stop() {
+                if (this.timer) clearInterval(this.timer);
+            }
+        }
+
+        const audio = new SynthwaveEngine();
+        document.getElementById('btn-audio').addEventListener('click', () => audio.toggle());
+    </script>
+
+    <!-- SILNIK GRY I PODZIELONY STOPNIOWO GENERATOR 100 POZIOMÓW -->
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const failOverlay = document.getElementById('fail-overlay');
+        const winOverlay = document.getElementById('win-overlay');
+        const levelDisplay = document.getElementById('level-display');
+        const difficultyBadge = document.getElementById('difficulty-badge');
+
+        const WORLD_WIDTH = 960;
+        const WORLD_HEIGHT = 540;
+
+        function resizeCanvas() {
+            const aspect = WORLD_WIDTH / WORLD_HEIGHT;
+            let w = window.innerWidth - 32;
+            let h = window.innerHeight - 100;
+
+            if (w / h > aspect) {
+                w = h * aspect;
+            } else {
+                h = w / aspect;
+            }
+
+            canvas.width = WORLD_WIDTH;
+            canvas.height = WORLD_HEIGHT;
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        let currentLevel = 1;
+        let isFailing = false;
+        let isWinning = false;
+        let unlockedLevel = 1;
+
+        let ball = {
+            x: 70,
+            y: 400,
+            radius: 11,
+            vx: 0,
+            vy: 0,
+            speed: 5.6,
+            jumpPower: -11.8,
+            isGrounded: false
+        };
+
+        let platforms = [];
+        let spikes = [];
+        let saws = [];
+        let lasers = [];
+        let crumblingPlatforms = [];
+        let goal = { x: 0, y: 0, radius: 22 };
+
+        function seededRandom(seed) {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // --- PRECYZYJNIE ZESTROJONY GENERATOR TRUDNOŚCI 1-100 ---
+        function generateLevel(lvl) {
+            platforms = [];
+            spikes = [];
+            saws = [];
+            lasers = [];
+            crumblingPlatforms = [];
+
+            let rngSeed = lvl * 1234;
+            const rand = () => seededRandom(rngSeed++);
+
+            // Oznaczenia i parametry stopniowej trudności:
+            let startW, endW, numSections, platWBase;
+            let allowSpikes = false, allowCrumbling = false, allowSaws = false, allowLasers = false;
+
+            if (lvl <= 10) {
+                // POZIOMY 1 - 10: MEGA ŁATWE
+                difficultyBadge.innerText = "Trudność: Mega Łatwe (1-10)";
+                difficultyBadge.className = "text-[11px] text-emerald-400 font-bold";
+                startW = 180;
+                endW = 160;
+                numSections = 3;
+                platWBase = 160;
+            } else if (lvl <= 20) {
+                // POZIOMY 11 - 20: RÓWNIEŻ ŁATWE
+                difficultyBadge.innerText = "Trudność: Łatwe (11-20)";
+                difficultyBadge.className = "text-[11px] text-sky-400 font-bold";
+                startW = 150;
+                endW = 140;
+                numSections = 4;
+                platWBase = 130;
+                allowSpikes = true; // Pierwsze łatwe kolce
+            } else if (lvl === 23) {
+                // POZIOM 23 SPECJALNIE UŁATWIONY
+                difficultyBadge.innerText = "Trudność: Poziom 23 (Ułatwiony)";
+                difficultyBadge.className = "text-[11px] text-emerald-400 font-bold";
+                startW = 170;
+                endW = 160;
+                numSections = 3;
+                platWBase = 150;
+                allowSpikes = false;
+                allowCrumbling = false;
+                allowSaws = false;
+            } else if (lvl <= 60) {
+                // POZIOMY 21 - 60: POWOLI TRUDNO
+                difficultyBadge.innerText = "Trudność: Średnie (21-60)";
+                difficultyBadge.className = "text-[11px] text-amber-400 font-bold";
+                startW = 120;
+                endW = 110;
+                numSections = 5;
+                platWBase = 95;
+                allowSpikes = true;
+                allowCrumbling = true; // Znikające platformy
+                allowSaws = true; // Pierwsze wolne tarcze
+            } else {
+                // POZIOMY 61 - 100: MEGA TRUDNE / HARDCORE
+                difficultyBadge.innerText = "Trudność: HARDCORE (61-100)";
+                difficultyBadge.className = "text-[11px] text-red-500 font-black animate-pulse";
+                startW = 80;
+                endW = 80;
+                numSections = 6;
+                platWBase = 65;
+                allowSpikes = true;
+                allowCrumbling = true;
+                allowSaws = true;
+                allowLasers = true; // Szybkie lasery
+            }
+
+            platforms.push({ x: 0, y: 460, w: startW, h: 80 });
+            platforms.push({ x: WORLD_WIDTH - endW, y: 460, w: endW, h: 80 });
+
+            ball.x = startW / 2;
+            ball.y = 420;
+            ball.vx = 0;
+            ball.vy = 0;
+
+            goal = { x: WORLD_WIDTH - endW / 2, y: 410, radius: 22 };
+
+            const sectionWidth = (WORLD_WIDTH - startW - endW) / numSections;
+
+            for (let i = 0; i < numSections; i++) {
+                const sx = startW + i * sectionWidth;
+                const platWidth = Math.max(40, platWBase - (lvl % 10) * 1.5 - rand() * 15);
+                const platY = 430 - (i % 3) * 60 - rand() * 40;
+
+                // Tworzenie Platformy
+                if (allowCrumbling && rand() > 0.6) {
+                    crumblingPlatforms.push({
+                        x: sx + (sectionWidth - platWidth) / 2,
+                        y: platY,
+                        w: platWidth,
+                        h: 20,
+                        stepped: false,
+                        timer: 0.9
+                    });
+                } else {
+                    platforms.push({
+                        x: sx + (sectionWidth - platWidth) / 2,
+                        y: platY,
+                        w: platWidth,
+                        h: 20
+                    });
+                }
+
+                // Kolce
+                if (allowSpikes && rand() < (lvl <= 20 ? 0.3 : 0.6)) {
+                    const spikeX = sx + (sectionWidth - platWidth) / 2 + rand() * (platWidth - 22);
+                    spikes.push({
+                        x: spikeX,
+                        y: platY - 20,
+                        w: 22,
+                        h: 20
+                    });
+                }
+
+                // Tarcze Piły
+                if (allowSaws && rand() < (lvl <= 60 ? 0.35 : 0.65)) {
+                    saws.push({
+                        x: sx + sectionWidth / 2,
+                        y: platY - 50 - rand() * 60,
+                        radius: 16 + rand() * 6,
+                        angle: 0,
+                        speed: 0.05 + (lvl / 100) * 0.1,
+                        vx: (rand() - 0.5) * (2 + (lvl / 100) * 5),
+                        minX: sx,
+                        maxX: sx + sectionWidth
+                    });
+                }
+
+                // Lasery
+                if (allowLasers && rand() < 0.5) {
+                    lasers.push({
+                        x: sx + sectionWidth / 2,
+                        y: 100,
+                        h: 280,
+                        vy: 2.5 + (lvl / 100) * 3,
+                        minY: 80,
+                        maxY: 280
+                    });
+                }
+            }
+
+            // Przepaść - kolce na dole (Tylko od poziomu 21+ z wyjątkiem ułatwionego 23)
+            if (lvl > 20 && lvl !== 23) {
+                for (let x = startW; x < WORLD_WIDTH - endW; x += 36) {
+                    if (rand() < 0.75) {
+                        spikes.push({ x: x, y: 516, w: 32, h: 24 });
+                    }
+                }
+            }
+
+            levelDisplay.innerText = `${lvl} / 100`;
+        }
+
+        function triggerFailure() {
+            if (isFailing || isWinning) return;
+            isFailing = true;
+            audio.playFail();
+
+            failOverlay.style.display = 'flex';
+
+            setTimeout(() => {
+                failOverlay.style.display = 'none';
+                isFailing = false;
+                generateLevel(currentLevel);
+            }, 1400);
+        }
+
+        function triggerWin() {
+            if (isWinning || isFailing) return;
+            isWinning = true;
+            audio.playWin();
+
+            if (currentLevel >= unlockedLevel) {
+                unlockedLevel = Math.min(100, currentLevel + 1);
+            }
+
+            winOverlay.style.display = 'flex';
+            document.getElementById('win-level-text').innerText = `Odblokowano poziom ${Math.min(100, currentLevel + 1)}!`;
+
+            setTimeout(() => {
+                winOverlay.style.display = 'none';
+                isWinning = false;
+                currentLevel = Math.min(100, currentLevel + 1);
+                generateLevel(currentLevel);
+            }, 1300);
+        }
+
+        let touchLeft = false;
+        let touchRight = false;
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') jump();
+        });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        document.getElementById('btn-left').addEventListener('touchstart', (e) => { e.preventDefault(); touchLeft = true; });
+        document.getElementById('btn-left').addEventListener('touchend', (e) => { e.preventDefault(); touchLeft = false; });
+
+        document.getElementById('btn-right').addEventListener('touchstart', (e) => { e.preventDefault(); touchRight = true; });
+        document.getElementById('btn-right').addEventListener('touchend', (e) => { e.preventDefault(); touchRight = false; });
+
+        document.getElementById('btn-jump').addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+
+        function jump() {
+            if (ball.isGrounded && !isFailing && !isWinning) {
+                ball.vy = ball.jumpPower;
+                ball.isGrounded = false;
+                audio.playJump();
+            }
+        }
+
+        function update(delta) {
+            if (isFailing || isWinning) return;
+
+            let move = 0;
+            if (keys['KeyA'] || keys['ArrowLeft'] || touchLeft) move -= 1;
+            if (keys['KeyD'] || keys['ArrowRight'] || touchRight) move += 1;
+
+            ball.vx = move * ball.speed;
+            ball.vy += 0.58;
+
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            if (ball.x - ball.radius < 0) ball.x = ball.radius;
+            if (ball.x + ball.radius > WORLD_WIDTH) ball.x = WORLD_WIDTH - ball.radius;
+
+            ball.isGrounded = false;
+
+            // Platformy Stałe
+            for (const p of platforms) {
+                if (ball.x + ball.radius > p.x &&
+                    ball.x - ball.radius < p.x + p.w &&
+                    ball.y + ball.radius >= p.y &&
+                    ball.y + ball.radius <= p.y + p.h + 8 &&
+                    ball.vy >= 0) {
+                    
+                    ball.y = p.y - ball.radius;
+                    ball.vy = 0;
+                    ball.isGrounded = true;
+                }
+            }
+
+            // Platformy Znikające
+            for (let i = crumblingPlatforms.length - 1; i >= 0; i--) {
+                const cp = crumblingPlatforms[i];
+                if (ball.x + ball.radius > cp.x &&
+                    ball.x - ball.radius < cp.x + cp.w &&
+                    ball.y + ball.radius >= cp.y &&
+                    ball.y + ball.radius <= cp.y + cp.h + 8 &&
+                    ball.vy >= 0) {
+                    
+                    ball.y = cp.y - ball.radius;
+                    ball.vy = 0;
+                    ball.isGrounded = true;
+                    cp.stepped = true;
+                }
+
+                if (cp.stepped) {
+                    cp.timer -= delta;
+                    if (cp.timer <= 0) {
+                        crumblingPlatforms.splice(i, 1);
+                    }
+                }
+            }
+
+            // Kolce
+            for (const s of spikes) {
+                if (ball.x + ball.radius > s.x + 2 &&
+                    ball.x - ball.radius < s.x + s.w - 2 &&
+                    ball.y + ball.radius > s.y + 2 &&
+                    ball.y - ball.radius < s.y + s.h) {
+                    triggerFailure();
+                }
+            }
+
+            // Tarcze Piły
+            for (const saw of saws) {
+                saw.x += saw.vx;
+                saw.angle += saw.speed;
+
+                if (saw.x <= saw.minX || saw.x >= saw.maxX) saw.vx *= -1;
+
+                const dx = ball.x - saw.x;
+                const dy = ball.y - saw.y;
+                if (Math.sqrt(dx * dx + dy * dy) < ball.radius + saw.radius) {
+                    triggerFailure();
+                }
+            }
+
+            // Lasery
+            for (const l of lasers) {
+                l.y += l.vy;
+                if (l.y <= l.minY || l.y >= l.maxY) l.vy *= -1;
+
+                if (Math.abs(ball.x - l.x) < ball.radius + 4 &&
+                    ball.y > l.y && ball.y < l.y + l.h) {
+                    triggerFailure();
+                }
+            }
+
+            // Przepaść
+            if (ball.y - ball.radius > WORLD_HEIGHT) {
+                triggerFailure();
+            }
+
+            // Meta
+            const gdx = ball.x - goal.x;
+            const gdy = ball.y - goal.y;
+            if (Math.sqrt(gdx * gdx + gdy * gdy) < ball.radius + goal.radius) {
+                triggerWin();
+            }
+        }
+
+        // --- RENDEROWANIE KANWY GRAFIKI 2D ---
+        let portalAngle = 0;
+        function render() {
+            ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < WORLD_WIDTH; x += 40) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_HEIGHT); ctx.stroke();
+            }
+
+            // 1. Platformy Stałe
+            platforms.forEach(p => {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = '#10b981';
+                ctx.fillRect(p.x, p.y, p.w, 4);
+            });
+
+            // 2. Platformy Znikające
+            crumblingPlatforms.forEach(cp => {
+                ctx.fillStyle = cp.stepped ? '#78350f' : '#b45309';
+                ctx.fillRect(cp.x, cp.y, cp.w, cp.h);
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(cp.x, cp.y, cp.w, 4);
+
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cp.x + 6, cp.y); ctx.lineTo(cp.x + 16, cp.y + cp.h);
+                ctx.moveTo(cp.x + 22, cp.y); ctx.lineTo(cp.x + 32, cp.y + cp.h);
+                ctx.stroke();
+            });
+
+            // 3. Kolce
+            spikes.forEach(s => {
+                const grad = ctx.createLinearGradient(s.x, s.y, s.x, s.y + s.h);
+                grad.addColorStop(0, '#f87171');
+                grad.addColorStop(1, '#991b1b');
+
+                ctx.save();
+                ctx.fillStyle = grad;
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2;
+                ctx.shadowColor = '#ef4444';
+                ctx.shadowBlur = 10;
+
+                ctx.beginPath();
+                ctx.moveTo(s.x, s.y + s.h);
+                ctx.lineTo(s.x + s.w / 2, s.y);
+                ctx.lineTo(s.x + s.w, s.y + s.h);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 4. Tarcze Piły
+            saws.forEach(saw => {
+                ctx.save();
+                ctx.translate(saw.x, saw.y);
+                ctx.rotate(saw.angle);
+
+                ctx.shadowColor = '#f43f5e';
+                ctx.shadowBlur = 20;
+
+                ctx.fillStyle = '#f43f5e';
+                ctx.beginPath();
+                const teeth = 10;
+                for (let i = 0; i < teeth; i++) {
+                    const a = (i / teeth) * Math.PI * 2;
+                    const r = i % 2 === 0 ? saw.radius : saw.radius * 0.65;
+                    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#1e293b';
+                ctx.beginPath();
+                ctx.arc(0, 0, saw.radius * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, 0, saw.radius * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            });
+
+            // 5. Lasery
+            lasers.forEach(l => {
+                ctx.save();
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 6;
+                ctx.shadowColor = '#ef4444';
+                ctx.shadowBlur = 15;
+
+                ctx.beginPath();
+                ctx.moveTo(l.x, l.y);
+                ctx.lineTo(l.x, l.y + l.h);
+                ctx.stroke();
+
+                ctx.fillStyle = '#475569';
+                ctx.fillRect(l.x - 6, l.y - 6, 12, 8);
+                ctx.fillRect(l.x - 6, l.y + l.h - 2, 12, 8);
+                ctx.restore();
+            });
+
+            // 6. Zielony Portal Metu
+            portalAngle += 0.06;
+            ctx.save();
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 5;
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 25;
+            ctx.beginPath();
+            ctx.arc(goal.x, goal.y, goal.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#34d399';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(goal.x, goal.y, goal.radius - 8, portalAngle, portalAngle + Math.PI * 1.5);
+            ctx.stroke();
+            ctx.restore();
+
+            // 7. BIAŁA KULKA
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 22;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        let lastFrameTime = performance.now();
+        function gameLoop(now) {
+            const delta = Math.min((now - lastFrameTime) / 1000, 0.1);
+            lastFrameTime = now;
+
+            update(delta);
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // MODAL WYBORU POZIOMÓW
+        const levelModal = document.getElementById('level-modal');
+        const levelsGrid = document.getElementById('levels-grid');
+
+        document.getElementById('btn-select-level').addEventListener('click', () => {
+            renderLevelGrid();
+            levelModal.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-close-modal').addEventListener('click', () => {
+            levelModal.classList.add('hidden');
+        });
+
+        function renderLevelGrid() {
+            levelsGrid.innerHTML = '';
+            for (let i = 1; i <= 100; i++) {
+                const btn = document.createElement('button');
+                const isUnlocked = i <= unlockedLevel;
+
+                btn.className = `p-2.5 rounded-xl font-black text-xs transition flex flex-col items-center justify-center ${
+                    i === currentLevel 
+                        ? 'bg-amber-500 text-gray-950 ring-2 ring-white shadow-lg' 
+                        : isUnlocked 
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white' 
+                            : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'
+                }`;
+
+                btn.innerText = i;
+                if (isUnlocked) {
+                    btn.addEventListener('click', () => {
+                        currentLevel = i;
+                        levelModal.classList.add('hidden');
+                        generateLevel(currentLevel);
+                    });
+                }
+
+                levelsGrid.appendChild(btn);
+            }
+        }
+
+        // Start Gry
+        resizeCanvas();
+        generateLevel(1);
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
+
